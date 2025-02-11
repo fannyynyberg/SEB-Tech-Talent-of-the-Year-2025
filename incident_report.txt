@@ -1,0 +1,46 @@
+Incident Report
+===============================
+Training Accuracy: 0.99
+Test Accuracy: 0.98
+Model does not appear to be overfitting.
+-----------------------------------
+Incident 1:
+  - Predicted State: Awaiting Problem
+  - Recommended Action: Review incident details and determine next steps.
+-----------------------------------
+Incident 2:
+  - Predicted State: Awaiting Evidence
+  - Recommended Action: Follow up for required documentation or proof.
+-----------------------------------
+Incident 3:
+  - Predicted State: Awaiting Evidence
+  - Recommended Action: Follow up for required documentation or proof.
+-----------------------------------
+Incident 4:
+  - Predicted State: Awaiting Problem
+  - Recommended Action: Review incident details and determine next steps.
+-----------------------------------
+Incident 5:
+  - Predicted State: Awaiting Problem
+  - Recommended Action: Review incident details and determine next steps.
+-----------------------------------
+Incident 6:
+  - Predicted State: Awaiting Evidence
+  - Recommended Action: Follow up for required documentation or proof.
+-----------------------------------
+Incident 7:
+  - Predicted State: Awaiting Vendor
+  - Recommended Action: Contact the vendor for an update on progress.
+-----------------------------------
+Incident 8:
+  - Predicted State: Awaiting Problem
+  - Recommended Action: Review incident details and determine next steps.
+-----------------------------------
+Incident 9:
+  - Predicted State: Awaiting Problem
+  - Recommended Action: Review incident details and determine next steps.
+-----------------------------------
+Incident 10:
+  - Predicted State: Awaiting Problem
+  - Recommended Action: Review incident details and determine next steps.
+-----------------------------------
