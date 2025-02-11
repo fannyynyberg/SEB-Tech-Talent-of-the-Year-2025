@@ -9,6 +9,10 @@ import xgboost as xgb
 
 # Function to load the dataset from a CSV file
 def load_data(file_path):
+    """
+    Loads a dataset from a CSV file. Tries both comma and semicolon separators.
+    Returns a pandas DataFrame with column names stripped of leading/trailing spaces.
+    """
     df = pd.read_csv(file_path, sep=",", encoding="utf-8")
     if 'opened_at' not in df.columns:
         df = pd.read_csv(file_path, sep=";", encoding="utf-8")
@@ -17,6 +21,11 @@ def load_data(file_path):
 
 # Function to preprocess data and encode categorical features
 def preprocess_data(df):
+    """
+    Prepares the dataset by converting datetime columns, extracting relevant features,
+    handling missing values, and encoding categorical features into numerical values.
+    Returns the processed feature set and a mapping for incident states.
+    """
     if 'opened_at' in df.columns:
         df['opened_at'] = pd.to_datetime(df['opened_at'], format="%d/%m/%Y %H:%M", errors='coerce', dayfirst=True)
     if 'resolved_at' in df.columns:
@@ -46,6 +55,11 @@ def preprocess_data(df):
 
 # Function to balance dataset using undersampling and SMOTE
 def balance_data(X, y):
+    """
+    Balances the dataset using undersampling and SMOTE (Synthetic Minority Over-sampling Technique).
+    Ensures that majority classes are not more than 4x the smallest class and that all classes have at least 500 samples.
+    Returns the balanced feature set and target labels.
+    """
     class_counts = y.value_counts()
     max_class_count = class_counts.max()
     min_class_count = class_counts.min()
@@ -70,6 +84,10 @@ def balance_data(X, y):
 
 # Function to train XGBoost classifier and generate report
 def train_model(df, incident_state_mapping):
+    """
+    Trains an XGBoost classifier using a balanced dataset, evaluates model accuracy,
+    and generates an incident report with predicted states and recommended actions.
+    """
     X = df.drop(columns=['incident_state_encoded'])
     y = df['incident_state_encoded']
     
