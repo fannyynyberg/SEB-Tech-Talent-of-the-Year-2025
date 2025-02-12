@@ -6,13 +6,14 @@ from sklearn.metrics import accuracy_score, classification_report
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import xgboost as xgb
+import vertexai
+from vertexai.generative_models import GenerativeModel
+
+# Initialize Vertex AI
+vertexai.init(project="tech-talent-3-57e19185", location="europe-west1")
 
 # Function to load the dataset from a CSV file
 def load_data(file_path):
-    """
-    Loads a dataset from a CSV file. Tries both comma and semicolon separators.
-    Returns a pandas DataFrame with column names stripped of leading/trailing spaces.
-    """
     df = pd.read_csv(file_path, sep=",", encoding="utf-8")
     if 'opened_at' not in df.columns:
         df = pd.read_csv(file_path, sep=";", encoding="utf-8")
@@ -21,20 +22,11 @@ def load_data(file_path):
 
 # Function to preprocess data and encode categorical features
 def preprocess_data(df):
-    """
-    Prepares the dataset by converting datetime columns, extracting relevant features,
-    handling missing values, and encoding categorical features into numerical values.
-    Returns the processed feature set and a mapping for incident states.
-    """
     if 'opened_at' in df.columns:
-        df['opened_at'] = pd.to_datetime(df['opened_at'], format="%d/%m/%Y %H:%M", errors='coerce', dayfirst=True)
-    if 'resolved_at' in df.columns:
-        df['resolved_at'] = pd.to_datetime(df['resolved_at'], format="%d/%m/%Y %H:%M", errors='coerce', dayfirst=True)
-    
-    df = df.dropna(subset=['opened_at'])
-    df['day_of_week'] = df['opened_at'].dt.dayofweek
-    df['hour'] = df['opened_at'].dt.hour
-    df['is_weekend'] = df['day_of_week'].apply(lambda x: 1 if x >= 5 else 0)
+        df['opened_at'] = pd.to_datetime(df['opened_at'], errors='coerce', dayfirst=True)
+        df['day_of_week'] = df['opened_at'].dt.dayofweek
+        df['hour'] = df['opened_at'].dt.hour
+        df['is_weekend'] = df['day_of_week'].apply(lambda x: 1 if x >= 5 else 0)
     
     df = df.dropna(subset=['incident_state'])
     df['incident_state'] = df['incident_state'].astype(str).str.strip()
@@ -44,26 +36,14 @@ def preprocess_data(df):
     incident_state_mapping = df['incident_state'].cat.categories
     df['incident_state_encoded'] = df['incident_state'].cat.codes
     
-    df['priority_encoded'] = df['priority'].astype('category').cat.codes
-    df['impact_encoded'] = df['impact'].astype('category').cat.codes
-    df['urgency_encoded'] = df['urgency'].astype('category').cat.codes
-    df['category_encoded'] = df['category'].astype('category').cat.codes
-    df['assignment_group_encoded'] = df['assignment_group'].astype('category').cat.codes
-    
-    return df[['day_of_week', 'hour', 'is_weekend', 'priority_encoded', 'impact_encoded', 'urgency_encoded',
-               'category_encoded', 'assignment_group_encoded', 'incident_state_encoded']], incident_state_mapping
+    return df, incident_state_mapping
 
 # Function to balance dataset using undersampling and SMOTE
 def balance_data(X, y):
-    """
-    Balances the dataset using undersampling and SMOTE (Synthetic Minority Over-sampling Technique).
-    Ensures that majority classes are not more than 4x the smallest class and that all classes have at least 500 samples.
-    Returns the balanced feature set and target labels.
-    """
     class_counts = y.value_counts()
     max_class_count = class_counts.max()
     min_class_count = class_counts.min()
-
+    
     if max_class_count > 4 * min_class_count:
         undersample_strategy = {cls: min(count, 4 * min_class_count) for cls, count in class_counts.items()}
         undersample = RandomUnderSampler(sampling_strategy=undersample_strategy, random_state=42)
@@ -82,13 +62,9 @@ def balance_data(X, y):
     
     return X, y
 
-# Function to train XGBoost classifier and generate report
-def train_model(df, incident_state_mapping):
-    """
-    Trains an XGBoost classifier using a balanced dataset, evaluates model accuracy,
-    and generates an incident report with predicted states and recommended actions.
-    """
-    X = df.drop(columns=['incident_state_encoded'])
+# Function to train XGBoost classifier and return accuracy
+def train_model(df):
+    X = df[['day_of_week', 'hour', 'is_weekend']]
     y = df['incident_state_encoded']
     
     X_balanced, y_balanced = balance_data(X, y)
@@ -106,51 +82,52 @@ def train_model(df, incident_state_mapping):
         gamma=0.1,
         random_state=42
     )
-    model.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_test, y_test)], verbose=False)
-
+    model.fit(X_train, y_train)
+    
     train_accuracy = accuracy_score(y_train, model.predict(X_train))
     test_accuracy = accuracy_score(y_test, model.predict(X_test))
-    overfitting_warning = "Warning: Model may be overfitting!" if train_accuracy - test_accuracy > 0.05 else "Model does not appear to be overfitting."
     
-    y_pred = model.predict(X_test[:10])
-    report_lines = [
-        "Incident Report", "===============================",
-        f"Training Accuracy: {train_accuracy:.2f}",
-        f"Test Accuracy: {test_accuracy:.2f}",
-        overfitting_warning,
-        "-----------------------------------"
-    ]
+    print(f"\nTraining Accuracy: {train_accuracy:.2f}")
+    print(f"Test Accuracy: {test_accuracy:.2f}")
     
-    recommended_actions = {
-        "Active": "Ensure assigned team is actively investigating.",
-        "Awaiting User Info": "Review incident details for next steps.",
-        "New": "Review incident details for next steps.",
-        "Resolved": "Verify resolution and close the incident if confirmed.",
-        "Closed": "No further action needed. Incident is closed.",
-        "Awaiting Evidence": "Follow up for required documentation or proof.",
-        "Awaiting Vendor": "Contact the vendor for an update on progress.",
-        "Awaiting Problem Resolution": "Coordinate with the problem management team.",
-        "Awaiting Change": "Monitor the related change request for updates.",
-        "Awaiting Approval": "Follow up with approvers for decision-making.",
-        "Canceled": "Incident has been canceled, no further action required.",
-        "Unknown": "Review details and determine next steps."
-    }
-    
-    for i, pred in enumerate(y_pred):
-        state = incident_state_mapping[pred]
-        action = recommended_actions.get(state, "Review incident details and determine next steps.")
-        report_lines.append(f"Incident {i+1}:")
-        report_lines.append(f"  - Predicted State: {state}")
-        report_lines.append(f"  - Recommended Action: {action}")
-        report_lines.append("-----------------------------------")
-    
-    with open("incident_report.txt", "w") as file:
-        file.write("\n".join(report_lines))
-    
-    print("Incident report has been generated: incident_report.txt")
-    return model, X_test, y_test
+    return model, train_accuracy, test_accuracy
 
+# Function to generate an AI-driven incident report
+def generate_incident_report(incident):
+    model = GenerativeModel("gemini-1.5-flash-002")
+    
+    prompt_text = (
+        f"### Incident Analysis Report\n"
+        f"**Incident ID:** {incident['number']}\n"
+        f"**State:** {incident['incident_state']}\n"
+        f"**Priority:** {incident.get('priority', 'Unknown')}\n"
+        f"**Impact:** {incident.get('impact', 'Unknown')}\n"
+        f"**Urgency:** {incident.get('urgency', 'Unknown')}\n"
+        f"**Reopened:** {incident['reopen_count']} times\n"
+        f"**Reassigned:** {incident['reassignment_count']} times\n"
+        f"**Resolution Time:** {incident.get('resolved_at', 'Unknown')}\n"
+        f"**Possible Cause:** {incident.get('caused_by', 'Unknown')}\n\n"
+        "Analyze the given incident details and provide a clear summary with potential causes and recommended actions."
+    )
+    
+    response = model.generate_content(prompt_text)
+    return response.text
+
+# Main execution
 if __name__ == "__main__":
     file_path = "incident_event_log.csv"
     df, incident_state_mapping = preprocess_data(load_data(file_path))  
-    model, X_test, y_test = train_model(df, incident_state_mapping)
+    model, train_acc, test_acc = train_model(df)
+    
+    sample_incident = df.iloc[0].to_dict()
+    incident_report = generate_incident_report(sample_incident)
+    
+    # Save the report to a file
+    report_filename = "incident_report.md"
+    with open(report_filename, "w") as file:
+        file.write(f"### Incident Report: {sample_incident['number']}\n\n")
+        file.write(f"**Training Accuracy:** {train_acc:.2f}\n")
+        file.write(f"**Test Accuracy:** {test_acc:.2f}\n\n")
+        file.write(incident_report)
+    
+    print(f"Incident report saved to {report_filename}")
