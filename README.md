@@ -1,5 +1,7 @@
 # Incident Classification Model
 
+This project was a contribution to the case week *Tech Talent of the Year 2025* at SEB. This solution won 2nd place in the final competition.
+
 ## Overview
 
 This project implements an **XGBoost classifier** for predicting the state of incidents based on historical data. The model uses **SMOTE** and **Random Undersampling** to balance the dataset, ensuring that classifications are accurate and reliable. The script processes raw incident data, extracts key features, trains an optimized machine learning model, and generates an **AI-driven incident report** using **Google Vertex AI**.
