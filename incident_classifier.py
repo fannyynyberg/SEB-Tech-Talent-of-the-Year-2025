@@ -9,7 +9,7 @@ import xgboost as xgb
 import vertexai
 from vertexai.generative_models import GenerativeModel
 
-# Initialize Vertex AI
+# Initialize Vertex AI, Gemini 1.5 Flash
 vertexai.init(project="tech-talent-3-57e19185", location="europe-west1")
 
 # Function to load the dataset from a CSV file
